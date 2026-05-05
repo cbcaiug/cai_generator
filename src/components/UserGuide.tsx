@@ -62,6 +62,9 @@ export default function UserGuide() {
               <li><strong>Level Scores:</strong> Enter the raw marks for SC and GS at each level (1-5).</li>
               <li><strong>Totals:</strong> The Total CAI and %CAI will calculate automatically <em>only</em> when all SC and GS scores across all 5 levels are entered.</li>
             </ul>
+            <p className="mt-4 bg-zinc-50 p-3 rounded-lg border border-zinc-100">
+              <strong>Quick Switch:</strong> You can quickly switch between the Standard Score Sheet and the Reverse Calculation view by clicking the "Reverse Calculation" or "Score Entry" button located next to the Add Learner button.
+            </p>
           </div>
         </section>
 
@@ -91,8 +94,13 @@ export default function UserGuide() {
           </div>
           <div className="p-6 space-y-4 text-sm text-zinc-600">
             <p>
-              Click "Export to Spreadsheet" to download an Excel file containing all your data. The exported file includes the Standard Score Sheet, the Reverse Score Sheet, and a User Guide sheet. 
+              Click "Export to Spreadsheet" to download your data to an Excel file. By clicking the dropdown arrow next to the export button, you can choose one of three options:
             </p>
+             <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Score Sheet Only:</strong> Exports just the standard entry data.</li>
+              <li><strong>Reverse Calc Sheet Only:</strong> Exports just the predictive scores data.</li>
+              <li><strong>All Sheets:</strong> Exports both data sheets along with a User Guide tab.</li>
+            </ul>
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3 text-blue-800">
               <Info size={20} className="shrink-0 mt-0.5" />
               <p>The exported Excel file retains all automatic calculation formulas, so you can continue working on it offline!</p>

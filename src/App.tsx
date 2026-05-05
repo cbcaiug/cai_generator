@@ -340,13 +340,22 @@ export default function App() {
                   ? "Standard Score Sheet"
                   : "Reverse Calculation"}
               </h2>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="premium-button-primary flex items-center justify-center gap-2 w-10 h-10 md:w-auto md:h-auto md:px-5 md:py-2 p-0 rounded-full shrink-0"
-              >
-                <Plus size={18} />
-                <span className="hidden md:inline">Add Learner</span>
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => setActiveSection(activeSection === "standard" ? "reverse" : "standard")}
+                  className="premium-button-secondary flex items-center justify-center gap-2 md:px-5 md:py-2 p-0 rounded-full shrink-0"
+                >
+                  <RefreshCcw size={16} />
+                  <span className="hidden md:inline">{activeSection === "standard" ? "Reverse Calculation" : "Score Entry"}</span>
+                </button>
+                <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="premium-button-primary flex items-center justify-center gap-2 w-10 h-10 md:w-auto md:h-auto md:px-5 md:py-2 p-0 rounded-full shrink-0"
+                >
+                  <Plus size={18} />
+                  <span className="hidden md:inline">Add Learner</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -393,18 +402,6 @@ export default function App() {
                 onLearnerDataChange={handleLearnerDataChange}
               />
             )}
-
-            {(activeSection === "standard" || activeSection === "reverse") &&
-              learners.length === 0 && (
-                <div className="py-24 flex flex-col items-center justify-center text-zinc-400">
-                  <div className="w-12 h-12 rounded-full bg-zinc-50 flex items-center justify-center mb-4 border border-zinc-100">
-                    <Plus size={24} />
-                  </div>
-                  <p className="text-sm">
-                    No learners added yet. Click 'Add Learner' to start.
-                  </p>
-                </div>
-              )}
           </div>
         </main>
       </div>

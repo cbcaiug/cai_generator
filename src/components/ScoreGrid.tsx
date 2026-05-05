@@ -30,6 +30,48 @@ export default function ScoreGrid({
     isOpen: false, title: '', msg: '', onConfirm: () => {}
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [streamFilter, setStreamFilter] = useState('');
+  const [freezeCols, setFreezeCols] = useState(true);
+  const [draggedColId, setDraggedColId] = useState<string | null>(null);
+
+  const filteredLearners = learners.filter(l => {
+    if (searchQuery && !l.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (streamFilter && l.stream !== streamFilter) return false;
+    return true;
+  });
+  const uniqueStreams = Array.from(new Set(learners.map(l => l.stream).filter(Boolean)));
+
+  const handleDragStart = (e: React.DragEvent, colId: string) => {
+    setDraggedColId(colId);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+  const handleDrop = (e: React.DragEvent, targetColId: string) => {
+    e.preventDefault();
+    if (draggedColId && draggedColId !== targetColId) {
+      const idx1 = columnOrder.indexOf(draggedColId);
+      const idx2 = columnOrder.indexOf(targetColId);
+      if (idx1 > -1 && idx2 > -1) {
+        const newOrder = [...columnOrder];
+        newOrder.splice(idx1, 1);
+        newOrder.splice(idx2, 0, draggedColId);
+        onColumnOrderChange(newOrder);
+      }
+    }
+    setDraggedColId(null);
+  };
+
+  const getFormatHighlight = (learnerId: string) => {
+     const pctStr = calculatePercentage(learnerId);
+     if (!pctStr) return '';
+     const pct = parseFloat(pctStr);
+     if (pct > 80) return 'text-green-700 bg-green-50 font-bold';
+     if (pct >= 60) return 'text-yellow-700 bg-yellow-50 font-bold';
+     return 'text-red-700 bg-red-50 font-bold';
+  };
+
   const getScore = (learnerId: string, level: number, type: 'sc' | 'gs') => {
     const scoreRow = scores.find(s => s.learnerId === learnerId);
     return scoreRow?.scores[level]?.[type] ?? '';
@@ -228,7 +270,50 @@ export default function ScoreGrid({
   );
 
   return (
-    <div className="overflow-x-auto pb-32">
+    <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-zinc-200">
+      <div className="p-4 border-b border-zinc-200 flex flex-col md:flex-row gap-4 items-center justify-between bg-zinc-50 rounded-t-xl">
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <input 
+            type="text" 
+            placeholder="Search learners..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="premium-input w-full md:w-64"
+          />
+          <select 
+            value={streamFilter} 
+            onChange={(e) => setStreamFilter(e.target.value)}
+            className="premium-input w-full md:w-40"
+          >
+            <option value="">All Streams</option>
+            {uniqueStreams.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-zinc-600 flex items-center gap-2 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={freezeCols} 
+              onChange={(e) => setFreezeCols(e.target.checked)}
+              className="rounded border-zinc-300 text-black focus:ring-black"
+            />
+            Freeze Left Columns
+          </label>
+        </div>
+      </div>
+      
+      {learners.length === 0 ? (
+        <div className="py-24 flex flex-col items-center justify-center text-zinc-400">
+          <div className="w-16 h-16 rounded-full bg-zinc-50 flex items-center justify-center mb-4 border border-zinc-100 shadow-sm shadow-zinc-200/50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+          </div>
+          <p className="text-base text-zinc-600 font-medium mb-1">No learners found</p>
+          <p className="text-sm">Click 'Add Learner' at the top to start registering students.</p>
+        </div>
+      ) : (
+      <div className="overflow-x-auto pb-32">
       <PromptModal 
         isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
         onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
@@ -244,31 +329,55 @@ export default function ScoreGrid({
           <tr className="bg-zinc-50 border-b border-zinc-200">
             {columnOrder.map(colId => {
               if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) {
-                const isSticky = ['index', 'name'].includes(colId);
-                const stickyClass = colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-16 border-r' : colId === 'name' ? 'sticky left-16 bg-zinc-50 z-10 min-w-48 border-r' : 'border-r';
+                const isSticky = freezeCols && ['index', 'name'].includes(colId);
+                const stickyClass = !isSticky ? 'border-r' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-16 border-r' : 'sticky left-16 bg-zinc-50 z-10 min-w-48 border-r shadow-[1px_0_0_0_#e4e4e7]';
                 return (
-                  <th key={colId} className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass}`}>
-                    {getColTitle(colId)} {renderMenu(colId)}
+                  <th 
+                    key={colId} 
+                    className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass} cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, colId)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, colId)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{getColTitle(colId)}</span>
+                      {renderMenu(colId)}
+                    </div>
                   </th>
                 );
               }
               if (colId === 'aoi' || colId === 'totals' || colId.startsWith('l')) {
                 return (
-                  <th key={colId} className="p-3 text-center border-r border-zinc-200 bg-zinc-100/50 min-w-[120px] whitespace-nowrap" colSpan={2}>
-                    {getColTitle(colId)} {renderMenu(colId)}
+                  <th 
+                    key={colId} 
+                    colSpan={2} 
+                    className={`p-3 text-center border-r border-zinc-200 bg-zinc-100/50 min-w-[120px] whitespace-nowrap cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, colId)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, colId)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex-1 text-center font-bold">{getColTitle(colId)}</span>
+                      {renderMenu(colId)}
+                    </div>
                   </th>
                 );
               }
               return null;
             })}
-            <th className="p-3 w-10"></th>
+            <th className="p-3 w-12 sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10"></th>
           </tr>
 
           {/* Sub Headers */}
           <tr className="bg-white border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             {columnOrder.map(colId => {
-              if (colId === 'name') return <th key={colId} className="p-2 border-r border-zinc-200 text-right pr-4">MAX SCORES &rarr;</th>;
-              if (['index', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className="p-2 border-r border-zinc-200"></th>;
+              const isSticky = freezeCols && ['index', 'name'].includes(colId);
+              const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-white z-10 w-16 border-r border-zinc-200' : 'sticky left-16 bg-white z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
+              
+              if (colId === 'name') return <th key={colId} className={`p-2 text-right pr-4 ${stickyClass}`}>MAX SCORES &rarr;</th>;
+              if (['index', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className={`p-2 ${stickyClass}`}></th>;
               if (colId === 'aoi') return (
                 <React.Fragment key={colId}>
                   <th className="p-2 border-r border-zinc-200 bg-zinc-50">Pts</th>
@@ -289,15 +398,18 @@ export default function ScoreGrid({
               );
               return null;
             })}
-            <th className="p-2"></th>
+            <th className="p-2 bg-white sticky right-0 z-10 border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7]"></th>
           </tr>
 
           {/* Max Scores */}
           <tr className="bg-zinc-50/50 border-b border-zinc-200 text-xs font-mono font-medium">
             {columnOrder.map(colId => {
-              if (colId === 'index') return <td key={colId} className="p-2 border-r border-zinc-200 text-center">#</td>;
-              if (colId === 'name') return <td key={colId} className="p-2 border-r border-zinc-200">Values from subject config</td>;
-              if (['stream'].includes(colId) || colId.startsWith('custom_')) return <td key={colId} className="p-2 border-r border-zinc-200"></td>;
+              const isSticky = freezeCols && ['index', 'name'].includes(colId);
+              const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-16 border-r border-zinc-200' : 'sticky left-16 bg-zinc-50 z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
+
+              if (colId === 'index') return <td key={colId} className={`p-2 text-center ${stickyClass}`}>#</td>;
+              if (colId === 'name') return <td key={colId} className={`p-2 ${stickyClass}`}>Values from subject config</td>;
+              if (['stream'].includes(colId) || colId.startsWith('custom_')) return <td key={colId} className={`p-2 ${stickyClass}`}></td>;
               if (colId === 'aoi') return (
                 <React.Fragment key={colId}>
                   <td className="p-2 border-r border-zinc-200 text-center font-bold">{subject.aoi_max}</td>
@@ -321,17 +433,18 @@ export default function ScoreGrid({
               );
               return null;
             })}
-            <td className="p-2"></td>
+            <td className="p-2 sticky right-0 bg-zinc-50 z-10 border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7]"></td>
           </tr>
         </thead>
 
         <tbody>
-          {learners.map((learner, idx) => (
+          {filteredLearners.map((learner, idx) => (
             <tr key={learner.id} className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
               {columnOrder.map(colId => {
-                if (colId === 'index') return <td key={colId} className="p-3 text-center sticky left-0 bg-white border-r border-zinc-100 text-xs text-zinc-400">{idx + 1}</td>;
+                const isSticky = freezeCols && ['index', 'name'].includes(colId);
+                if (colId === 'index') return <td key={colId} className={`p-3 text-center border-r border-zinc-100 text-xs text-zinc-400 ${isSticky ? 'sticky left-0 bg-white z-10' : ''}`}>{idx + 1}</td>;
                 if (colId === 'name') return (
-                  <td key={colId} className="p-0 font-medium sticky left-16 bg-white border-r border-zinc-100 whitespace-nowrap min-w-48">
+                  <td key={colId} className={`p-0 font-medium whitespace-nowrap border-r border-zinc-100 min-w-48 ${isSticky ? 'sticky left-16 bg-white z-10 shadow-[1px_0_0_0_#e4e4e7]' : ''}`}>
                     <input 
                       type="text"
                       className="w-full h-full min-h-[44px] px-3 bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:text-zinc-600 disabled:bg-zinc-50/50"
@@ -382,8 +495,8 @@ export default function ScoreGrid({
                 }
                 if (colId === 'aoi') return (
                   <React.Fragment key={colId}>
-                    <td className="p-0 border-r border-zinc-100 bg-zinc-50/30 min-w-16">
-                      <input type="number" step="0.1" className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed" value={getAoI(learner.id) ?? ''} onChange={(e) => updateAoI(learner.id, e.target.value)} disabled={isLocked(colId)} />
+                    <td className="p-0 border-r border-zinc-100 bg-zinc-50/30 min-w-16 relative">
+                      <input type="number" step="0.1" min="0" max={subject.aoi_max} className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black invalid:text-red-500 invalid:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" value={getAoI(learner.id) ?? ''} onChange={(e) => updateAoI(learner.id, e.target.value)} disabled={isLocked(colId)} />
                     </td>
                     <td className="p-3 text-center border-r border-zinc-100 text-xs font-mono text-zinc-400 min-w-16">
                       {getAoI(learner.id) !== '' ? (((getAoI(learner.id) as number) / subject.aoi_max) * 100).toFixed(0) : '-'}
@@ -392,26 +505,30 @@ export default function ScoreGrid({
                 );
                 if (colId.startsWith('l')) {
                   const levelNum = parseInt(colId[1]);
+                  const lcfg = subject.levels.find(l => l.level === levelNum);
                   return (
                     <React.Fragment key={colId}>
-                      <td className="p-0 border-r border-zinc-50 min-w-16">
-                        <input type="number" className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed" value={getScore(learner.id, levelNum, 'sc')} onChange={(e) => updateScore(learner.id, levelNum, 'sc', e.target.value)} disabled={isLocked(colId)} />
+                      <td className="p-0 border-r border-zinc-50 min-w-16 relative">
+                        <input type="number" min="0" max={lcfg?.sc_max} className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black invalid:text-red-500 invalid:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" value={getScore(learner.id, levelNum, 'sc')} onChange={(e) => updateScore(learner.id, levelNum, 'sc', e.target.value)} disabled={isLocked(colId)} />
                       </td>
-                      <td className="p-0 border-r border-zinc-100 min-w-16">
-                        <input type="number" className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed" value={getScore(learner.id, levelNum, 'gs')} onChange={(e) => updateScore(learner.id, levelNum, 'gs', e.target.value)} disabled={isLocked(colId)} />
+                      <td className="p-0 border-r border-zinc-100 min-w-16 relative">
+                        <input type="number" min="0" max={lcfg?.gs_max} className="w-full h-10 px-2 text-center bg-transparent font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black invalid:text-red-500 invalid:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" value={getScore(learner.id, levelNum, 'gs')} onChange={(e) => updateScore(learner.id, levelNum, 'gs', e.target.value)} disabled={isLocked(colId)} />
                       </td>
                     </React.Fragment>
                   );
                 }
-                if (colId === 'totals') return (
-                  <React.Fragment key={colId}>
-                    <td className="p-3 text-center border-r border-zinc-200 bg-zinc-50 font-mono font-bold min-w-16">{calculateTotal(learner.id) ?? '-'}</td>
-                    <td className="p-3 text-center border-r border-zinc-200 bg-zinc-50 font-mono font-bold min-w-16">{calculatePercentage(learner.id) ?? '-'}%</td>
-                  </React.Fragment>
-                );
+                if (colId === 'totals') {
+                  const hl = getFormatHighlight(learner.id);
+                  return (
+                    <React.Fragment key={colId}>
+                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{calculateTotal(learner.id) ?? '-'}</td>
+                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{calculatePercentage(learner.id) ?? '-'}%</td>
+                    </React.Fragment>
+                  );
+                }
                 return null;
               })}
-              <td className="p-3 text-center">
+              <td className="p-3 text-center sticky right-0 bg-white border-l border-zinc-200 z-10 shadow-[-1px_0_0_0_#e4e4e7]">
                 <button onClick={() => onDeleteLearner(learner.id)} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
                   <Trash2 size={16} />
                 </button>
@@ -420,6 +537,8 @@ export default function ScoreGrid({
           ))}
         </tbody>
       </table>
+    </div>
+    )}
     </div>
   );
 }
