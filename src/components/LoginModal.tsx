@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { GraduationCap } from 'lucide-react';
 import { signInWithGoogle } from '../lib/firebase';
 
 interface LoginModalProps {
@@ -33,8 +32,8 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
       >
         <div className="p-8 text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-black flex items-center justify-center rounded-2xl mb-6 shadow-md">
-            <GraduationCap className="text-white w-8 h-8" />
+          <div className="w-20 h-20 bg-white flex items-center justify-center rounded-2xl mb-6 shadow-md border border-zinc-100 overflow-hidden">
+            <img src="/logo.png" alt="CAI Manager Logo" className="w-full h-full object-contain p-2" />
           </div>
           <h2 className="text-2xl font-bold font-display tracking-tight text-zinc-900 mb-2">Welcome to CAI Manager</h2>
           <p className="text-zinc-500 mb-8 max-w-xs">Sign in to manage your score sheets, track learner progress, and generate insights.</p>

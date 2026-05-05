@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "Sheet": {
+      "title": "Score Sheet",
+      "description": "A saved score sheet with learners and scores.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "data": { "type": "string", "description": "JSON stringified sheet data" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "data"]
+    },
+    "UserMetadata": {
+      "title": "User Metadata",
+      "description": "Metadata for the user's account.",
+      "type": "object",
+      "properties": {
+        "lastSavedSheet": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserMetadata",
+      "description": "User metadata and last saved info."
+    },
+    "users/{userId}/sheets/{sheetName}": {
+      "schema": "Sheet",
+      "description": "Collection of saved score sheets for a user."
+    }
+  }
+}

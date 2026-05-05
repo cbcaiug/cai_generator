@@ -11,9 +11,13 @@ interface Props {
   reverseScores: ReverseScoreData[];
   columnOrder: string[];
   customColumns: ColumnConfig[];
+  sheetCapacity?: number;
 }
 
-export default function ExportButton({ subject, learners, scores, reverseScores, columnOrder, customColumns }: Props) {
+export default function ExportButton({ 
+  subject, learners, scores, reverseScores, columnOrder, customColumns, 
+  sheetCapacity = 100 
+}: Props) {
   const [isExporting, setIsExporting] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -68,7 +72,22 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
       const { map: colMap, totalWidth } = generateColMap();
       const lastColLetter = getColLetter(totalWidth);
 
-      // --- 1. SCORE SHEET ---
+      // --- 1. GUIDE SHEET (FIRST) ---
+      if (type === 'all') {
+        const guideSheet = workbook.addWorksheet('User Guide');
+        guideSheet.columns = [{ width: 30 }, { width: 100 }];
+        guideSheet.addRow(['S3/S4 AoI & CAI Score Sheet — USER GUIDE']).font = { bold: true, size: 16 };
+        guideSheet.addRow([]);
+        guideSheet.addRow(['1. PREPARATION', 'Do This First']);
+        guideSheet.addRow(['Enter Max Scores', 'On the Score Sheet, find the MAX SCORES row (Row 4). Enter defaults from the subject config.']);
+        guideSheet.addRow(['2. DATA ENTRY', 'Score Sheet']);
+        guideSheet.addRow(['AoI Score', 'Enter raw Pts out of max (e.g. 2.5 out of 3). %AoI handles the rest.']);
+        guideSheet.addRow(['3. REVERSE SHEET', 'Special Feature']);
+        guideSheet.addRow(['The "Orange" Cells', 'Enter ONLY the percentages in the orange columns. The sheet will back-calculate raw scores.']);
+        guideSheet.addRow(['Difficulty Weights', 'L1 = 1.25, L2 = 1.10, L3 = 1.00, L4 = 0.85, L5 = 0.70.']);
+      }
+
+      // --- 2. SCORE SHEET ---
       if (type === 'all' || type === 'score') {
         const scoreSheet = workbook.addWorksheet('Score Sheet', {
           views: [{ state: 'frozen', ySplit: 4, xSplit: colMap.get('name')?.start || 2 }]
@@ -141,28 +160,66 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
           cell.alignment = { horizontal: 'center' };
         });
 
-        // Populate Data
-        learners.forEach((learner, idx) => {
+        // Populate Data + Formulae (Extend to Capacity)
+        const rowCount = Math.max(learners.length, sheetCapacity);
+        for (let idx = 0; idx < rowCount; idx++) {
           const rowIndex = 5 + idx;
           const row = scoreSheet.getRow(rowIndex);
-          const lScores = scores.find(s => s.learnerId === learner.id);
+          const learner = learners[idx];
+          const lScores = learner ? scores.find(s => s.learnerId === learner.id) : null;
           
           columnOrder.forEach(col => {
             const info = colMap.get(col);
             if (!info) return;
             
-            if (col === 'index') row.getCell(info.start).value = idx + 1;
-            else if (col === 'name') row.getCell(info.start).value = learner.name;
-            else if (col === 'stream') row.getCell(info.start).value = learner.stream;
-            else if (col.startsWith('custom_')) row.getCell(info.start).value = learner.customData?.[col] || '';
-            else if (col === 'aoi') {
-              row.getCell(info.start).value = lScores?.aoi ?? null;
+            if (col === 'index') {
+              row.getCell(info.start).value = idx + 1;
+            } else if (col === 'name') {
+              if (learner) row.getCell(info.start).value = learner.name;
+            } else if (col === 'stream') {
+              if (learner) row.getCell(info.start).value = learner.stream;
+            } else if (col.startsWith('custom_')) {
+              if (learner) row.getCell(info.start).value = learner.customData?.[col] || '';
+            } else if (col === 'aoi') {
+              if (learner) row.getCell(info.start).value = lScores?.aoi ?? null;
               const aoiColLetter = getColLetter(info.start);
-              row.getCell(info.start + 1).value = { formula: `IF(${aoiColLetter}${rowIndex}="","",ROUND(${aoiColLetter}${rowIndex}/${aoiColLetter}$4*100,0))` };
+              row.getCell(info.start + 1).value = { 
+                formula: `IF(${aoiColLetter}${rowIndex}="","",ROUND(${aoiColLetter}${rowIndex}/${aoiColLetter}$4*100,0))` 
+              };
+              // Add Data Validation for AoI
+              scoreSheet.getCell(`${aoiColLetter}${rowIndex}`).dataValidation = {
+                type: 'decimal',
+                operator: 'between',
+                allowBlank: true,
+                showErrorMessage: true,
+                formulae: [0, subject.aoi_max],
+                errorTitle: 'Invalid Score',
+                error: `Score must be between 0 and ${subject.aoi_max}`
+              };
             } else if (col.startsWith('l')) {
               const level = parseInt(col[1]);
-              row.getCell(info.start).value = lScores?.scores[level]?.sc ?? null;
-              row.getCell(info.start + 1).value = lScores?.scores[level]?.gs ?? null;
+              const lcfg = subject.levels.find(l => l.level === level);
+              const scColLtr = getColLetter(info.start);
+              const gsColLtr = getColLetter(info.start + 1);
+
+              if (learner) {
+                row.getCell(info.start).value = lScores?.scores[level]?.sc ?? null;
+                row.getCell(info.start + 1).value = lScores?.scores[level]?.gs ?? null;
+              }
+
+              // Data Validation for SC/GS
+              if (lcfg) {
+                const scCell = scoreSheet.getCell(`${scColLtr}${rowIndex}`);
+                scCell.dataValidation = {
+                  type: 'whole', operator: 'between', allowBlank: true, showErrorMessage: true,
+                  formulae: [0, lcfg.sc_max], errorTitle: 'Invalid SC Score', error: `L${level} SC must be a whole number between 0 and ${lcfg.sc_max}`
+                };
+                const gsCell = scoreSheet.getCell(`${gsColLtr}${rowIndex}`);
+                gsCell.dataValidation = {
+                  type: 'whole', operator: 'between', allowBlank: true, showErrorMessage: true,
+                  formulae: [0, lcfg.gs_max], errorTitle: 'Invalid GS Score', error: `L${level} GS must be a whole number between 0 and ${lcfg.gs_max}`
+                };
+              }
             } else if (col === 'totals') {
               const sumParts: string[] = [];
               for (let i = 1; i <= 5; i++) {
@@ -172,17 +229,17 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
                  }
               }
               if (sumParts.length > 0) {
-                 const sumRange = sumParts.join(',');
-                 row.getCell(info.start).value = { formula: `IF(COUNT(${sumRange})<10,"",SUM(${sumRange}))` };
+                 const sumRangeList = sumParts.join(',');
+                 row.getCell(info.start).value = { formula: `IF(COUNT(${sumRangeList})<10,"",SUM(${sumRangeList}))` };
                  const totalsColLetter = getColLetter(info.start);
                  row.getCell(info.start + 1).value = { formula: `IF(${totalsColLetter}${rowIndex}="","",ROUND(${totalsColLetter}${rowIndex}/${totalsColLetter}$4*100,0))` };
               }
             }
           });
-        });
+        }
       }
 
-      // --- 2. REVERSE SCORE SHEET ---
+      // --- 3. REVERSE SCORE SHEET ---
       if (type === 'all' || type === 'reverse') {
         const reverseSheet = workbook.addWorksheet('Reverse Score Sheet', {
           views: [{ state: 'frozen', ySplit: 5, xSplit: colMap.get('name')?.start || 2 }]
@@ -201,8 +258,6 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
           });
           const denom = `(${denomTerms.join('+')})`;
           
-          const maxTotal = subject.levels.reduce((acc, l) => acc + l.sc_max + l.gs_max, 0);
-
           const totMap = colMap.get('totals');
           if (!totMap) return "0";
           const caiInputLetter = getColLetter(totMap.start);
@@ -223,10 +278,10 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
           if (col === 'name') {
              revRow4.getCell(info.start).value = 'MAX SCORES →';
           } else if (col === 'aoi') {
-             revRow4.getCell(info.start).value = 100; // % Input Max doesn't really apply, using 100
+             revRow4.getCell(info.start).value = 100;
              revRow4.getCell(info.start + 1).value = subject.aoi_max;
           } else if (col === 'totals') {
-             revRow4.getCell(info.start).value = 100; // CAI Input
+             revRow4.getCell(info.start).value = 100;
              const maxTotal = subject.levels.reduce((acc, l) => acc + l.sc_max + l.gs_max, 0);
              revRow4.getCell(info.start + 1).value = maxTotal;
           } else if (col.startsWith('l')) {
@@ -263,27 +318,32 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
           cell.alignment = { horizontal: 'center' };
         });
 
-        learners.forEach((learner, idx) => {
+        const revRowCount = Math.max(learners.length, sheetCapacity);
+        for (let idx = 0; idx < revRowCount; idx++) {
           const rowIndex = 6 + idx;
           const row = reverseSheet.getRow(rowIndex);
-          const rData = reverseScores.find(s => s.learnerId === learner.id);
+          const learner = learners[idx];
+          const rData = learner ? reverseScores.find(s => s.learnerId === learner.id) : null;
 
           columnOrder.forEach(col => {
             const info = colMap.get(col);
             if (!info) return;
             
             if (col === 'index') row.getCell(info.start).value = idx + 1;
-            else if (col === 'name') row.getCell(info.start).value = learner.name;
-            else if (col === 'stream') row.getCell(info.start).value = learner.stream;
-            else if (col.startsWith('custom_')) row.getCell(info.start).value = learner.customData?.[col] || '';
-            else if (col === 'aoi') {
-              row.getCell(info.start).value = rData?.aoiPercentage ?? null;
+            else if (col === 'name') {
+              if (learner) row.getCell(info.start).value = learner.name;
+            } else if (col === 'stream') {
+              if (learner) row.getCell(info.start).value = learner.stream;
+            } else if (col.startsWith('custom_')) {
+              if (learner) row.getCell(info.start).value = learner.customData?.[col] || '';
+            } else if (col === 'aoi') {
+              if (learner) row.getCell(info.start).value = rData?.aoiPercentage ?? null;
               row.getCell(info.start).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFED7AA' } };
               const inputLetter = getColLetter(info.start);
               const calcLetter = getColLetter(info.start + 1);
               row.getCell(info.start + 1).value = { formula: `IF(${inputLetter}${rowIndex}="","",ROUND(${inputLetter}${rowIndex}/100*${calcLetter}$4,1))` };
             } else if (col === 'totals') {
-              row.getCell(info.start).value = rData?.caiPercentage ?? null;
+              if (learner) row.getCell(info.start).value = rData?.caiPercentage ?? null;
               row.getCell(info.start).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFED7AA' } };
               
               const calcCols: string[] = [];
@@ -303,7 +363,7 @@ export default function ExportButton({ subject, learners, scores, reverseScores,
               row.getCell(info.start + 1).value = { formula: getWeightedFormula(getColLetter(info.start + 1), rowIndex, weight) };
             }
           });
-        });
+        }
       }
 
       // --- 3. GUIDE SHEET ---

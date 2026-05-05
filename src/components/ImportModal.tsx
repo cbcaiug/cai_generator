@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Upload, FileSpreadsheet, Download, AlertCircle } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
 import * as ExcelJS from 'exceljs';
 import { Learner } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { cn } from '../lib/utils';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -16,38 +17,52 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   if (!isOpen) return null;
 
   const handleDownloadTemplate = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Learners Template');
-    
-    worksheet.columns = [
-      { header: 'Full Name (Required)', key: 'name', width: 30 },
-      { header: 'Stream/Class (Optional)', key: 'stream', width: 20 },
-    ];
+    setIsDownloadingTemplate(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Learners Template');
+      
+      worksheet.columns = [
+        { header: 'Full Name (Required)', key: 'name', width: 30 },
+        { header: 'Stream/Class (Optional)', key: 'stream', width: 20 },
+      ];
 
-    // Add some examples
-    worksheet.addRow({ name: 'John Doe', stream: 'Class A' });
-    worksheet.addRow({ name: 'Jane Smith', stream: 'Class B' });
+      // Add some examples
+      worksheet.addRow({ name: 'John Doe', stream: 'Class A' });
+      worksheet.addRow({ name: 'Jane Smith', stream: 'Class B' });
 
-    // Style headers
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
-    };
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Learners_Import_Template.xlsx';
-    a.click();
-    window.URL.revokeObjectURL(url);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Learners_Import_Template.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
   };
+
+
 
   const handleImport = async () => {
     if (!file) return;
@@ -119,10 +134,22 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
             <p className="text-zinc-500 mb-3">Download our spreadsheet template to ensure your data is formatted correctly before importing.</p>
             <button 
               onClick={handleDownloadTemplate}
-              className="flex items-center gap-2 text-blue-600 font-medium hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg"
+              disabled={isDownloadingTemplate}
+              className={cn(
+                "flex items-center gap-2 font-medium transition-all px-4 py-2 rounded-lg",
+                downloadSuccess 
+                ? "bg-green-50 text-green-700 border border-green-100" 
+                : "bg-blue-50 text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+              )}
             >
-              <FileSpreadsheet size={16} />
-              Download Excel Template
+              {isDownloadingTemplate ? (
+                 <div className="w-4 h-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+              ) : downloadSuccess ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <FileSpreadsheet size={16} />
+              )}
+              {downloadSuccess ? 'Downloaded!' : 'Download Excel Template'}
             </button>
           </div>
 

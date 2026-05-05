@@ -17,7 +17,6 @@ import {
   RefreshCcw,
   Info,
   ChevronRight,
-  GraduationCap,
   BookOpen,
   Settings as SettingsIcon,
   Menu,
@@ -27,6 +26,13 @@ import {
   Cloud,
   CloudUpload,
   CheckCircle2,
+  CircleAlert,
+  FileText,
+  Save,
+  Clock,
+  User as UserIcon,
+  ChevronDown,
+  LayoutGrid
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
@@ -47,7 +53,8 @@ import ExportButton from "./components/ExportButton";
 import UserGuide from "./components/UserGuide";
 import Settings from "./components/Settings";
 import LoginModal from "./components/LoginModal";
-import { auth, logOut, saveToCloud, loadFromCloud } from "./lib/firebase";
+import { PromptModal, ConfirmModal } from "./components/Dialogs";
+import { auth, logOut, saveToCloud, loadFromCloud, listCloudSheets, deleteCloudSheet } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
 export default function App() {
@@ -57,24 +64,24 @@ export default function App() {
   // Cloud Sync State
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
+  const [cloudSheets, setCloudSheets] = useState<any[]>([]);
+  const [currentSheetName, setCurrentSheetName] = useState<string>("Untitled Score Sheet");
+  const [sheetCapacity, setSheetCapacity] = useState<number>(100);
+
+  const [prompt, setPrompt] = useState<{ isOpen: boolean; title: string; desc: string; val: string; onConfirm: (v: string) => void }>({
+    isOpen: false, title: '', desc: '', val: '', onConfirm: () => {}
+  });
+
+  const fetchCloudSheets = async (userId: string) => {
+    const sheets = await listCloudSheets(userId);
+    setCloudSheets(sheets);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Automatically attempt to load cloud data on login
-        try {
-          const cloudData = await loadFromCloud(currentUser.uid);
-          if (cloudData) {
-            if (cloudData.learners) setLearners(cloudData.learners);
-            if (cloudData.scores) setScores(cloudData.scores);
-            if (cloudData.reverseScores) setReverseScores(cloudData.reverseScores);
-            if (cloudData.columnOrder) setColumnOrder(cloudData.columnOrder);
-            if (cloudData.customColumns) setCustomColumns(cloudData.customColumns);
-          }
-        } catch (error) {
-          console.error("Could not load initial data", error);
-        }
+        fetchCloudSheets(currentUser.uid);
       }
       setAuthLoading(false);
     });
@@ -167,22 +174,96 @@ export default function App() {
     );
   }, [customColumns]);
 
-  const handleSyncToCloud = async () => {
+  const handleSyncToCloud = async (nameOverride?: string) => {
     if (!user) return;
+    const name = nameOverride || currentSheetName;
     setSyncStatus('saving');
     try {
-      await saveToCloud(user.uid, {
+      const success = await saveToCloud(user.uid, name, {
         learners,
         scores,
         reverseScores,
         columnOrder,
-        customColumns
+        customColumns,
+        selectedSubjectName,
+        selectedClassName,
+        sheetCapacity
       });
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 3000);
+      
+      if (success) {
+        setSyncStatus('saved');
+        fetchCloudSheets(user.uid);
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      } else {
+        setSyncStatus('error');
+        setTimeout(() => setSyncStatus('idle'), 5000);
+      }
     } catch (error) {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 5000);
+    }
+  };
+
+  const handleLoadSheet = async (sheetName: string) => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      const data = await loadFromCloud(user.uid, sheetName);
+      if (data) {
+        if (data.learners) setLearners(data.learners);
+        if (data.scores) setScores(data.scores);
+        if (data.reverseScores) setReverseScores(data.reverseScores);
+        if (data.columnOrder) setColumnOrder(data.columnOrder);
+        if (data.customColumns) setCustomColumns(data.customColumns);
+        if (data.selectedSubjectName) setSelectedSubjectName(data.selectedSubjectName);
+        if (data.selectedClassName) setSelectedClassName(data.selectedClassName);
+        if (data.sheetCapacity) setSheetCapacity(data.sheetCapacity);
+        setCurrentSheetName(sheetName);
+        setActiveSection('standard');
+      }
+    } catch (error) {
+      alert("Failed to load sheet");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleNewSheet = () => {
+    setLearners([]);
+    setScores([]);
+    setReverseScores([]);
+    setColumnOrder(DEFAULT_COLUMN_ORDER);
+    setCustomColumns([]);
+    setCurrentSheetName("New Score Sheet");
+    setActiveSection('standard');
+  };
+
+  const handleSaveAs = () => {
+    setPrompt({
+      isOpen: true,
+      title: "Save As",
+      desc: "Enter a name for this score sheet profile.",
+      val: currentSheetName,
+      onConfirm: (val) => {
+        setCurrentSheetName(val);
+        handleSyncToCloud(val);
+      }
+    });
+  };
+
+  const handleDeleteSheet = async (e: React.MouseEvent, sheetName: string) => {
+    e.stopPropagation();
+    if (!user) return;
+    if (confirm(`Are you sure you want to delete "${sheetName}" from cloud?`)) {
+      try {
+        await deleteCloudSheet(user.uid, sheetName);
+        fetchCloudSheets(user.uid);
+        if (currentSheetName === sheetName) {
+           setCurrentSheetName("Untitled Score Sheet");
+        }
+      } catch (error) {
+        alert("Failed to delete sheet");
+      }
     }
   };
 
@@ -295,16 +376,18 @@ export default function App() {
               animate={{ x: 0, md: { width: 260, opacity: 1 } }}
               exit={{ x: -260, md: { width: 0, opacity: 0 } }}
               className="fixed md:static inset-y-0 left-0 z-50 flex-shrink-0 border-r border-zinc-200 bg-zinc-50 flex flex-col pt-4 overflow-hidden"
-              style={{ width: 260 }}
+              style={{ width: 280 }}
             >
-              <div className="px-6 mb-8 flex items-center justify-between gap-3">
+              <div className="px-6 mb-2 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-black flex items-center justify-center rounded-lg shrink-0">
-                    <GraduationCap className="text-white w-5 h-5" />
+                  <div className="w-8 h-8 rounded-lg shrink-0 overflow-hidden bg-white flex items-center justify-center border border-zinc-200">
+                    <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
                   </div>
-                  <h1 className="font-display font-semibold text-lg tracking-tight whitespace-nowrap">
-                    CAI Manager
-                  </h1>
+                  <div>
+                    <h1 className="font-display font-semibold text-base tracking-tight whitespace-nowrap">
+                      CAI Manager
+                    </h1>
+                  </div>
                 </div>
                 <button
                   onClick={() => setIsSidebarOpen(false)}
@@ -314,7 +397,16 @@ export default function App() {
                 </button>
               </div>
 
-              <nav className="flex-1 px-4 space-y-1">
+              {user && (
+                <div className="px-6 mb-6">
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-600 truncate bg-zinc-100/50 p-1.5 rounded-md border border-zinc-200/50">
+                    <UserIcon size={12} className="shrink-0" />
+                    <span className="truncate">{user.email}</span>
+                  </div>
+                </div>
+              )}
+
+              <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
                 <SidebarItem icon={BookOpen} label="User Guide" id="guide" />
                 <SidebarItem
                   icon={Table}
@@ -326,12 +418,67 @@ export default function App() {
                   label="Reverse Calc"
                   id="reverse"
                 />
+                
                 <div className="my-4 border-t border-zinc-200" />
+                
+                <div className="px-3 mb-2 flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Cloud Sheets</h3>
+                  <button onClick={handleNewSheet} className="p-1 hover:bg-zinc-200 rounded text-zinc-500" title="New Blank Sheet">
+                     <Plus size={14} />
+                  </button>
+                </div>
+                
+                <div className="space-y-0.5 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-200">
+                  {cloudSheets.length === 0 ? (
+                    <p className="px-3 py-2 text-[10px] text-zinc-400 italic">No saved sheets yet</p>
+                  ) : (
+                    cloudSheets.map(sheet => (
+                      <div
+                        key={sheet.id}
+                        onClick={() => handleLoadSheet(sheet.name)}
+                        className={cn(
+                          "group relative w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer",
+                          currentSheetName === sheet.name ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-100"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText size={14} className={currentSheetName === sheet.name ? "text-white" : "text-zinc-400"} />
+                          <span className="truncate">{sheet.name}</span>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteSheet(e, sheet.name)}
+                          className={cn(
+                            "opacity-0 group-hover:opacity-100 p-1 rounded-md transition-opacity",
+                            currentSheetName === sheet.name ? "hover:bg-white/20 text-white/60 hover:text-white" : "hover:bg-zinc-200 text-zinc-400 hover:text-red-500"
+                          )}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="my-4 border-t border-zinc-200" />
+                
                 <SidebarItem
                   icon={SettingsIcon}
                   label="Column Settings"
                   id="settings"
                 />
+
+                <div className="p-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Sheet Capacity</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      value={sheetCapacity}
+                      onChange={(e) => setSheetCapacity(Math.min(1000, Math.max(1, parseInt(e.target.value) || 1)))}
+                      className="w-full bg-white border border-zinc-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-black outline-none"
+                    />
+                    <span className="text-[10px] text-zinc-400">rows</span>
+                  </div>
+                </div>
               </nav>
 
               <div className="p-4 border-t border-zinc-200">
@@ -368,13 +515,18 @@ export default function App() {
               </button>
 
               <div className="md:hidden flex items-center gap-2 pr-2">
-                <div className="w-8 h-8 bg-black flex items-center justify-center rounded-lg">
-                  <GraduationCap className="text-white w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg overflow-hidden bg-white flex items-center justify-center border border-zinc-200">
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
+              <div className="hidden lg:flex items-center gap-1 border-r border-zinc-200 pr-4 mr-2">
+                 <FileText size={14} className="text-zinc-400" />
+                 <span className="text-xs font-semibold text-zinc-900 truncate max-w-[120px]" title={currentSheetName}>{currentSheetName}</span>
+              </div>
+              
               <div className="flex items-center gap-2">
                 <select
                   className="premium-input w-28 md:w-36 font-medium"
@@ -407,9 +559,9 @@ export default function App() {
                 </select>
               </div>
 
-              <div className="hidden md:flex items-center">
+               <div className="hidden md:flex items-center gap-2">
                 <button
-                  onClick={handleSyncToCloud}
+                  onClick={() => handleSyncToCloud()}
                   disabled={syncStatus === 'saving'}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border",
@@ -421,17 +573,23 @@ export default function App() {
                   )}
                 >
                   {syncStatus === 'saving' ? (
-                    <CloudUpload size={16} className="animate-bounce" />
+                    <CloudUpload size={16} className="animate-pulse" />
                   ) : syncStatus === 'saved' ? (
                     <CheckCircle2 size={16} />
+                  ) : syncStatus === 'error' ? (
+                    <CircleAlert size={16} />
                   ) : (
                     <Cloud size={16} />
                   )}
-                  <span>
-                    {syncStatus === 'saving' ? 'Saving...' 
-                    : syncStatus === 'saved' ? 'Saved'
-                    : 'Save to Cloud'}
-                  </span>
+                  <span>{syncStatus === 'saving' ? 'Saving...' : syncStatus === 'saved' ? 'Saved' : syncStatus === 'error' ? 'Error' : 'Save'}</span>
+                </button>
+                
+                <button
+                   onClick={handleSaveAs}
+                   className="p-2 text-zinc-500 hover:text-black hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200"
+                   title="Save As..."
+                >
+                  <Save size={16} />
                 </button>
               </div>
 
@@ -442,6 +600,7 @@ export default function App() {
                 reverseScores={reverseScores}
                 columnOrder={columnOrder}
                 customColumns={customColumns}
+                sheetCapacity={sheetCapacity}
               />
             </div>
           </div>
@@ -449,6 +608,10 @@ export default function App() {
 
         {/* Main View Area */}
         <main className="flex-1 overflow-y-auto px-4 md:px-8 py-8 bg-zinc-50/30">
+          <PromptModal 
+            isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
+            onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
+          />
           {(activeSection === "standard" || activeSection === "reverse") && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <h2 className="text-xl font-bold font-display flex items-center gap-2">
