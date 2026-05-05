@@ -46,3 +46,31 @@
   }
 }
 
+@media print {
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  
+  .overflow-x-auto {
+    overflow-x: visible !important;
+  }
+
+  table {
+    table-layout: auto !important;
+    width: 100% !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: white !important;
+  }
+
+  /* Ensure background colors are printed */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

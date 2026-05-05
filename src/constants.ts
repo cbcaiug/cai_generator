@@ -13,7 +13,7 @@ export const LEVEL_WEIGHTS = {
 
 export const DIFFICULTY_ORDER = [1, 2, 3, 4, 5];
 
-export const DEFAULT_COLUMN_ORDER = ['index', 'name', 'stream', 'aoi', 'l1', 'l2', 'l3', 'l4', 'l5', 'totals'];
+export const DEFAULT_COLUMN_ORDER = ['index', 'name', 'stream', 'aoi', 'totals', 'l1', 'l2', 'l3', 'l4', 'l5'];
 
 export const STORAGE_KEYS = {
   LEARNERS: 'cai_learners',

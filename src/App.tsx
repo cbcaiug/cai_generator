@@ -130,7 +130,16 @@ export default function App() {
   });
   const [columnOrder, setColumnOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.COLUMN_ORDER);
-    return saved ? JSON.parse(saved) : DEFAULT_COLUMN_ORDER;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migration: If user has the old default order, update it to the new one
+      const oldDefault = ['index', 'name', 'stream', 'aoi', 'l1', 'l2', 'l3', 'l4', 'l5', 'totals'];
+      if (JSON.stringify(parsed) === JSON.stringify(oldDefault)) {
+        return DEFAULT_COLUMN_ORDER;
+      }
+      return parsed;
+    }
+    return DEFAULT_COLUMN_ORDER;
   });
   const [customColumns, setCustomColumns] = useState<ColumnConfig[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CUSTOM_COLUMNS);

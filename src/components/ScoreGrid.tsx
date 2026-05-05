@@ -158,26 +158,32 @@ export default function ScoreGrid({
 
   const calculateTotal = (learnerId: string) => {
     const scoreRow = scores.find(s => s.learnerId === learnerId);
-    if (!scoreRow) return null;
+    if (!scoreRow) return '';
     let sum = 0;
-    let allFilled = true;
-    for (let i = 1; i <= 5; i++) {
-      const sc = scoreRow.scores[i]?.sc;
-      const gs = scoreRow.scores[i]?.gs;
-      if (sc === null || sc === undefined || gs === null || gs === undefined) {
-        allFilled = false;
-        break;
+    let anyRequiredLevelMissing = false;
+
+    // Only check levels that are defined and have max scores > 0 in the subject
+    subject.levels.forEach(l => {
+      if (l.sc_max > 0 || l.gs_max > 0) {
+        const sc = scoreRow.scores[l.level]?.sc;
+        const gs = scoreRow.scores[l.level]?.gs;
+        if (sc === null || sc === undefined || gs === null || gs === undefined) {
+          anyRequiredLevelMissing = true;
+        } else {
+          sum += sc + gs;
+        }
       }
-      sum += sc + gs;
-    }
-    return allFilled ? sum : null;
+    });
+
+    return anyRequiredLevelMissing ? '' : sum;
   };
 
   const calculatePercentage = (learnerId: string) => {
     const total = calculateTotal(learnerId);
-    if (total === null) return null;
+    if (total === '') return '';
     const maxTotal = subject.levels.reduce((acc, l) => acc + l.sc_max + l.gs_max, 0);
-    return ((total / maxTotal) * 100).toFixed(1);
+    if (maxTotal === 0) return '';
+    return ((Number(total) / maxTotal) * 100).toFixed(1);
   };
 
   const moveColumn = (colId: string, direction: 1 | -1) => {
@@ -314,92 +320,91 @@ export default function ScoreGrid({
         </div>
       ) : (
       <div className="overflow-x-auto pb-32">
-      <PromptModal 
-        isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
-        onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
-      />
-      <ConfirmModal 
-        isOpen={confirm.isOpen} title={confirm.title} message={confirm.msg}
-        onClose={() => setConfirm({ ...confirm, isOpen: false })} onConfirm={confirm.onConfirm}
-      />
+        <PromptModal 
+          isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
+          onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
+        />
+        <ConfirmModal 
+          isOpen={confirm.isOpen} title={confirm.title} message={confirm.msg}
+          onClose={() => setConfirm({ ...confirm, isOpen: false })} onConfirm={confirm.onConfirm}
+        />
+        <table className="w-full border-collapse text-sm table-auto">
+          <thead>
+            {/* Main Headers */}
+            <tr className="bg-zinc-50 border-b border-zinc-200">
+              {columnOrder.map(colId => {
+                if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) {
+                  const isSticky = freezeCols && ['index', 'name'].includes(colId);
+                  const stickyClass = !isSticky ? 'border-r' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-12 border-r text-center' : 'sticky left-12 bg-zinc-50 z-10 min-w-48 border-r shadow-[1px_0_0_0_#e4e4e7]';
+                  return (
+                    <th 
+                      key={colId} 
+                      className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass} cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, colId)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, colId)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{getColTitle(colId)}</span>
+                        {renderMenu(colId)}
+                      </div>
+                    </th>
+                  );
+                }
+                if (colId === 'aoi' || colId === 'totals' || colId.startsWith('l')) {
+                  return (
+                    <th 
+                      key={colId} 
+                      colSpan={2} 
+                      className={`p-3 text-center border-r border-zinc-200 bg-zinc-100/50 whitespace-nowrap cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, colId)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, colId)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex-1 text-center font-bold">{getColTitle(colId)}</span>
+                        {renderMenu(colId)}
+                      </div>
+                    </th>
+                  );
+                }
+                return null;
+              })}
+              <th className="p-3 w-12 sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 no-print"></th>
+            </tr>
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          {/* Main Headers */}
-          <tr className="bg-zinc-50 border-b border-zinc-200">
-            {columnOrder.map(colId => {
-              if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) {
+            {/* Sub Headers */}
+            <tr className="bg-white border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              {columnOrder.map(colId => {
                 const isSticky = freezeCols && ['index', 'name'].includes(colId);
-                const stickyClass = !isSticky ? 'border-r' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-16 border-r' : 'sticky left-16 bg-zinc-50 z-10 min-w-48 border-r shadow-[1px_0_0_0_#e4e4e7]';
-                return (
-                  <th 
-                    key={colId} 
-                    className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass} cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, colId)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, colId)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{getColTitle(colId)}</span>
-                      {renderMenu(colId)}
-                    </div>
-                  </th>
+                const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-white z-10 w-12 border-r border-zinc-200 text-center' : 'sticky left-12 bg-white z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
+                
+                if (colId === 'name') return <th key={colId} className={`p-2 text-right pr-4 ${stickyClass}`}>MAX SCORES &rarr;</th>;
+                if (['index', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className={`p-2 ${stickyClass}`}></th>;
+                if (colId === 'aoi') return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-200 bg-zinc-50 w-16">Pts</th>
+                    <th className="p-2 border-r border-zinc-200 bg-zinc-50 w-16">%</th>
+                  </React.Fragment>
                 );
-              }
-              if (colId === 'aoi' || colId === 'totals' || colId.startsWith('l')) {
-                return (
-                  <th 
-                    key={colId} 
-                    colSpan={2} 
-                    className={`p-3 text-center border-r border-zinc-200 bg-zinc-100/50 min-w-[120px] whitespace-nowrap cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, colId)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, colId)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex-1 text-center font-bold">{getColTitle(colId)}</span>
-                      {renderMenu(colId)}
-                    </div>
-                  </th>
+                if (colId.startsWith('l')) return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-100 w-16">SC</th>
+                    <th className="p-2 border-r border-zinc-200 w-16">GS</th>
+                  </React.Fragment>
                 );
-              }
-              return null;
-            })}
-            <th className="p-3 w-12 sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10"></th>
-          </tr>
-
-          {/* Sub Headers */}
-          <tr className="bg-white border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            {columnOrder.map(colId => {
-              const isSticky = freezeCols && ['index', 'name'].includes(colId);
-              const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-white z-10 w-16 border-r border-zinc-200' : 'sticky left-16 bg-white z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
-              
-              if (colId === 'name') return <th key={colId} className={`p-2 text-right pr-4 ${stickyClass}`}>MAX SCORES &rarr;</th>;
-              if (['index', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className={`p-2 ${stickyClass}`}></th>;
-              if (colId === 'aoi') return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-200 bg-zinc-50">Pts</th>
-                  <th className="p-2 border-r border-zinc-200 bg-zinc-50">%</th>
-                </React.Fragment>
-              );
-              if (colId.startsWith('l')) return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-100">SC</th>
-                  <th className="p-2 border-r border-zinc-200">GS</th>
-                </React.Fragment>
-              );
-              if (colId === 'totals') return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-200 bg-zinc-50">Raw</th>
-                  <th className="p-2 border-r border-zinc-200 bg-zinc-50">%</th>
-                </React.Fragment>
-              );
-              return null;
-            })}
-            <th className="p-2 bg-white sticky right-0 z-10 border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7]"></th>
-          </tr>
+                if (colId === 'totals') return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-200 bg-zinc-50 w-16">Raw</th>
+                    <th className="p-2 border-r border-zinc-200 bg-zinc-50 w-20">%</th>
+                  </React.Fragment>
+                );
+                return null;
+              })}
+              <th className="p-2 bg-white sticky right-0 z-10 border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7] no-print"></th>
+            </tr>
 
           {/* Max Scores */}
           <tr className="bg-zinc-50/50 border-b border-zinc-200 text-xs font-mono font-medium">
@@ -442,9 +447,9 @@ export default function ScoreGrid({
             <tr key={learner.id} className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
               {columnOrder.map(colId => {
                 const isSticky = freezeCols && ['index', 'name'].includes(colId);
-                if (colId === 'index') return <td key={colId} className={`p-3 text-center border-r border-zinc-100 text-xs text-zinc-400 ${isSticky ? 'sticky left-0 bg-white z-10' : ''}`}>{idx + 1}</td>;
+                if (colId === 'index') return <td key={colId} className={`p-3 text-center border-r border-zinc-100 text-xs text-zinc-400 ${isSticky ? 'sticky left-0 bg-white z-10 w-12' : ''}`}>{idx + 1}</td>;
                 if (colId === 'name') return (
-                  <td key={colId} className={`p-0 font-medium whitespace-nowrap border-r border-zinc-100 min-w-48 ${isSticky ? 'sticky left-16 bg-white z-10 shadow-[1px_0_0_0_#e4e4e7]' : ''}`}>
+                  <td key={colId} className={`p-0 font-medium whitespace-nowrap border-r border-zinc-100 min-w-48 ${isSticky ? 'sticky left-12 bg-white z-10 shadow-[1px_0_0_0_#e4e4e7]' : ''}`}>
                     <input 
                       type="text"
                       className="w-full h-full min-h-[44px] px-3 bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:text-zinc-600 disabled:bg-zinc-50/50"
@@ -519,16 +524,18 @@ export default function ScoreGrid({
                 }
                 if (colId === 'totals') {
                   const hl = getFormatHighlight(learner.id);
+                  const total = calculateTotal(learner.id);
+                  const percentage = calculatePercentage(learner.id);
                   return (
                     <React.Fragment key={colId}>
-                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{calculateTotal(learner.id) ?? '-'}</td>
-                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{calculatePercentage(learner.id) ?? '-'}%</td>
+                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{total !== '' ? total : ''}</td>
+                      <td className={`p-3 text-center border-r border-zinc-200 font-mono min-w-16 transition-colors ${hl || 'bg-zinc-50 font-bold'}`}>{percentage !== '' ? `${percentage}%` : ''}</td>
                     </React.Fragment>
                   );
                 }
                 return null;
               })}
-              <td className="p-3 text-center sticky right-0 bg-white border-l border-zinc-200 z-10 shadow-[-1px_0_0_0_#e4e4e7]">
+              <td className="p-3 text-center sticky right-0 bg-white border-l border-zinc-200 z-10 shadow-[-1px_0_0_0_#e4e4e7] no-print">
                 <button onClick={() => onDeleteLearner(learner.id)} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
                   <Trash2 size={16} />
                 </button>

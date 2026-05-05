@@ -134,7 +134,7 @@ export default function ReverseScoreGrid({
 
   const calculateDerivedScore = (learnerId: string, level: number, type: 'sc' | 'gs') => {
     const data = getReverseData(learnerId);
-    if (!data || data.caiPercentage === null) return '-';
+    if (!data || data.caiPercentage === null || data.caiPercentage === undefined) return '';
 
     const weight = LEVEL_WEIGHTS[level as keyof typeof LEVEL_WEIGHTS];
     const maxTotal = subject.levels.reduce((acc, l) => acc + l.sc_max + l.gs_max, 0);
@@ -144,24 +144,27 @@ export default function ReverseScoreGrid({
       return acc + (l.sc_max + l.gs_max) * w;
     }, 0);
 
-    if (denominator === 0) return '-';
+    if (denominator === 0) return '';
 
     const targetTotalCAI = (data.caiPercentage / 100) * maxTotal;
-    const maxForThisCell = type === 'sc' ? subject.levels.find(l => l.level === level)!.sc_max : subject.levels.find(l => l.level === level)!.gs_max;
+    const levelConfig = subject.levels.find(l => l.level === level);
+    if (!levelConfig) return '';
+    const maxForThisCell = type === 'sc' ? levelConfig.sc_max : levelConfig.gs_max;
     
     const result = Math.round((maxForThisCell * weight * targetTotalCAI) / denominator);
     return Math.min(result, maxForThisCell);
   };
 
   const calculateTotal = (learnerId: string) => {
-    let sum = 0;
     const data = getReverseData(learnerId);
-    if (!data || data.caiPercentage === null) return '-';
+    if (!data || data.caiPercentage === null || data.caiPercentage === undefined) return '';
 
+    let sum = 0;
     for (let i = 1; i <= 5; i++) {
-      const sc = calculateDerivedScore(learnerId, i, 'sc') as number;
-      const gs = calculateDerivedScore(learnerId, i, 'gs') as number;
-      sum += sc + gs;
+      const sc = calculateDerivedScore(learnerId, i, 'sc');
+      const gs = calculateDerivedScore(learnerId, i, 'gs');
+      if (typeof sc === 'number') sum += sc;
+      if (typeof gs === 'number') sum += gs;
     }
     return sum;
   };
@@ -299,119 +302,119 @@ export default function ReverseScoreGrid({
         </div>
       ) : (
       <div className="overflow-x-auto pb-32">
-      <PromptModal 
-        isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
-        onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
-      />
-      <ConfirmModal 
-        isOpen={confirm.isOpen} title={confirm.title} message={confirm.msg}
-        onClose={() => setConfirm({ ...confirm, isOpen: false })} onConfirm={confirm.onConfirm}
-      />
+        <PromptModal 
+          isOpen={prompt.isOpen} title={prompt.title} description={prompt.desc} initialValue={prompt.val}
+          onClose={() => setPrompt({ ...prompt, isOpen: false })} onConfirm={prompt.onConfirm}
+        />
+        <ConfirmModal 
+          isOpen={confirm.isOpen} title={confirm.title} message={confirm.msg}
+          onClose={() => setConfirm({ ...confirm, isOpen: false })} onConfirm={confirm.onConfirm}
+        />
 
-      <div className="p-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 text-xs text-zinc-500">
-        <AlertCircle size={14} className="text-orange-500" />
-        <p>Entry Mode: Enter percentages to back-calculate raw scores.</p>
-      </div>
-      
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-zinc-50 border-b border-zinc-200">
-            {columnOrder.map(colId => {
-              if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) {
-                const isSticky = freezeCols && ['index', 'name'].includes(colId);
-                const stickyClass = !isSticky ? 'border-r' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-16 border-r' : 'sticky left-16 bg-zinc-50 z-10 min-w-48 border-r shadow-[1px_0_0_0_#e4e4e7]';
-                return (
-                  <th 
-                    key={colId} 
-                    className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass} cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, colId)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, colId)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{getColTitle(colId)}</span>
-                      {renderMenu(colId)}
-                    </div>
-                  </th>
-                );
-              }
-              if (colId === 'aoi' || colId === 'totals' || colId.startsWith('l')) {
-                return (
-                  <th 
-                    key={colId} 
-                    className={`p-3 text-center border-r border-zinc-200 bg-zinc-100/50 min-w-[120px] whitespace-nowrap cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`} 
-                    colSpan={2}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, colId)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, colId)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex-1 text-center font-bold">{getColTitle(colId)}</span>
-                      {renderMenu(colId)}
-                    </div>
-                  </th>
-                );
-              }
-              return null;
-            })}
-            <th className="p-3 w-12 sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10"></th>
-          </tr>
-          <tr className="bg-white border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            {columnOrder.map(colId => {
-              const isSticky = freezeCols && ['index', 'name'].includes(colId);
-              const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-white z-10 w-16 border-r border-zinc-200' : 'sticky left-16 bg-white z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
-              if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className={`p-2 ${stickyClass}`}></th>;
-              if (colId === 'aoi') return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-200 bg-orange-100/50 min-w-24">%AoI Input</th>
-                  <th className="p-2 border-r border-zinc-200 text-zinc-400 min-w-24">AoI/3 Calc</th>
-                </React.Fragment>
-              );
-              if (colId === 'totals') return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-200 bg-orange-100/50 min-w-24">%CAI Input</th>
-                  <th 
-                    className="p-2 border-r border-zinc-200 bg-zinc-100/80 min-w-24 relative group cursor-help"
-                    title="This value is calculated based on weighted difficulty and the %CAI input"
-                  >
-                    Total Calc
-                  </th>
-                </React.Fragment>
-              );
-              if (colId.startsWith('l')) return (
-                <React.Fragment key={colId}>
-                  <th className="p-2 border-r border-zinc-100 min-w-16">SC (Calc)</th>
-                  <th className="p-2 border-r border-zinc-200 min-w-16">GS (Calc)</th>
-                </React.Fragment>
-              );
-              return null;
-            })}
-            <th className="p-2 sticky right-0 bg-white border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7] z-10"></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {filteredLearners.map((learner, idx) => (
-            <tr key={learner.id} className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+        <div className="p-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 text-xs text-zinc-500">
+          <AlertCircle size={14} className="text-orange-500" />
+          <p>Entry Mode: Enter percentages to back-calculate raw scores.</p>
+        </div>
+        
+        <table className="w-full border-collapse text-sm table-auto">
+          <thead>
+            <tr className="bg-zinc-50 border-b border-zinc-200">
+              {columnOrder.map(colId => {
+                if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) {
+                  const isSticky = freezeCols && ['index', 'name'].includes(colId);
+                  const stickyClass = !isSticky ? 'border-r' : colId === 'index' ? 'sticky left-0 bg-zinc-50 z-10 w-12 border-r text-center' : 'sticky left-12 bg-zinc-50 z-10 min-w-48 border-r shadow-[1px_0_0_0_#e4e4e7]';
+                  return (
+                    <th 
+                      key={colId} 
+                      className={`p-3 text-left border-zinc-200 whitespace-nowrap ${stickyClass} cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, colId)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, colId)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{getColTitle(colId)}</span>
+                        {renderMenu(colId)}
+                      </div>
+                    </th>
+                  );
+                }
+                if (colId === 'aoi' || colId === 'totals' || colId.startsWith('l')) {
+                  return (
+                    <th 
+                      key={colId} 
+                      className={`p-3 text-center border-r border-zinc-200 bg-zinc-100/50 whitespace-nowrap cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors ${draggedColId === colId ? 'opacity-50' : ''}`} 
+                      colSpan={2}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, colId)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, colId)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex-1 text-center font-bold">{getColTitle(colId)}</span>
+                        {renderMenu(colId)}
+                      </div>
+                    </th>
+                  );
+                }
+                return null;
+              })}
+              <th className="p-3 w-12 sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 no-print"></th>
+            </tr>
+            <tr className="bg-white border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
               {columnOrder.map(colId => {
                 const isSticky = freezeCols && ['index', 'name'].includes(colId);
-                if (colId === 'index') return <td key={colId} className={`p-3 text-center border-r border-zinc-100 text-xs text-zinc-400 ${isSticky ? 'sticky left-0 bg-white z-10' : ''}`}>{idx + 1}</td>;
-                if (colId === 'name') return (
-                  <td key={colId} className={`p-0 font-medium whitespace-nowrap border-r border-zinc-100 min-w-48 ${isSticky ? 'sticky left-16 bg-white z-10 shadow-[1px_0_0_0_#e4e4e7]' : ''}`}>
-                    <input 
-                      type="text"
-                      className="w-full h-full min-h-[44px] px-3 bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:text-zinc-600 disabled:bg-zinc-50/50"
-                      value={learner.name}
-                      disabled={isLocked(colId)}
-                      onChange={(e) => {
-                        const updated = learners.map(l => l.id === learner.id ? { ...l, name: e.target.value } : l);
-                        onLearnerDataChange(updated);
-                      }}
-                    />
-                  </td>
+                const stickyClass = !isSticky ? 'border-r border-zinc-200' : colId === 'index' ? 'sticky left-0 bg-white z-10 w-12 border-r border-zinc-200 text-center' : 'sticky left-12 bg-white z-10 min-w-48 border-r border-zinc-200 shadow-[1px_0_0_0_#e4e4e7]';
+                if (['index', 'name', 'stream'].includes(colId) || colId.startsWith('custom_')) return <th key={colId} className={`p-2 ${stickyClass}`}></th>;
+                if (colId === 'aoi') return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-200 bg-orange-100/50 w-16">% AoI</th>
+                    <th className="p-2 border-r border-zinc-200 text-zinc-400 w-16">Raw AoI</th>
+                  </React.Fragment>
                 );
+                if (colId === 'totals') return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-200 bg-orange-100/50 w-16">% CAI</th>
+                    <th 
+                      className="p-2 border-r border-zinc-200 bg-zinc-100/80 w-16 relative group cursor-help"
+                      title="This value is calculated based on weighted difficulty and the %CAI input"
+                    >
+                      Raw CAI
+                    </th>
+                  </React.Fragment>
+                );
+                if (colId.startsWith('l')) return (
+                  <React.Fragment key={colId}>
+                    <th className="p-2 border-r border-zinc-100 w-16">SC (Calc)</th>
+                    <th className="p-2 border-r border-zinc-200 w-16">GS (Calc)</th>
+                  </React.Fragment>
+                );
+                return null;
+              })}
+              <th className="p-2 sticky right-0 bg-white border-l border-zinc-200 shadow-[-1px_0_0_0_#e4e4e7] z-10 no-print"></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {filteredLearners.map((learner, idx) => (
+              <tr key={learner.id} className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+                {columnOrder.map(colId => {
+                  const isSticky = freezeCols && ['index', 'name'].includes(colId);
+                  if (colId === 'index') return <td key={colId} className={`p-3 text-center border-r border-zinc-100 text-xs text-zinc-400 ${isSticky ? 'sticky left-0 bg-white z-10 w-12' : ''}`}>{idx + 1}</td>;
+                  if (colId === 'name') return (
+                    <td key={colId} className={`p-0 font-medium whitespace-nowrap border-r border-zinc-100 min-w-48 ${isSticky ? 'sticky left-12 bg-white z-10 shadow-[1px_0_0_0_#e4e4e7]' : ''}`}>
+                      <input 
+                        type="text"
+                        className="w-full h-full min-h-[44px] px-3 bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-black disabled:text-zinc-600 disabled:bg-zinc-50/50"
+                        value={learner.name}
+                        disabled={isLocked(colId)}
+                        onChange={(e) => {
+                          const updated = learners.map(l => l.id === learner.id ? { ...l, name: e.target.value } : l);
+                          onLearnerDataChange(updated);
+                        }}
+                      />
+                    </td>
+                  );
                 if (colId === 'stream') return (
                   <td key={colId} className="p-0 text-zinc-500 border-r border-zinc-100 min-w-24">
                     <input 
@@ -465,7 +468,7 @@ export default function ReverseScoreGrid({
                     <td className="p-3 text-center border-r border-zinc-100 text-xs font-mono font-bold text-zinc-600 bg-zinc-50/50">
                       {getReverseData(learner.id)?.aoiPercentage !== null && getReverseData(learner.id)?.aoiPercentage !== undefined
                         ? ((getReverseData(learner.id)!.aoiPercentage! / 100) * subject.aoi_max).toFixed(1)
-                        : '-'}
+                        : ''}
                     </td>
                   </React.Fragment>
                 );
@@ -506,7 +509,7 @@ export default function ReverseScoreGrid({
                 }
                 return null;
               })}
-              <td className="p-3 text-center sticky right-0 bg-white border-l border-zinc-200 z-10 shadow-[-1px_0_0_0_#e4e4e7]">
+              <td className="p-3 text-center sticky right-0 bg-white border-l border-zinc-200 z-10 shadow-[-1px_0_0_0_#e4e4e7] no-print">
                 <button 
                   onClick={() => onDeleteLearner(learner.id)}
                   className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
