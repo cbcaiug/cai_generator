@@ -1,0 +1,6 @@
+{
+  "name": "CAI Score Manager",
+  "description": "Professional Continuous Assessment Instrument (CAI) manager for educators. Features score tracking, reverse score calculation, and advanced Excel export with embedded formulas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

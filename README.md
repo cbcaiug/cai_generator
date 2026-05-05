@@ -1,11 +1,41 @@
-<div align="center">
+# CAI Score Manager
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+CAI Score Manager is a modern, responsive web application designed for educators and administrators to manage, calculate, and analyze learner scores. It provides a comprehensive suite of tools for processing standard continuous assessments and performing reverse calculations.
 
-  <h1>Built with AI Studio</h2>
+## Key Features
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+- **Standard Score Sheet:** Easily track and manage learner scores across multiple assessment levels, with automatic calculations for CAI Totals.
+- **Reverse Calculation:** Perform reverse score analysis based on target percentages and derived scores.
+- **Dynamic Custom Columns:** Add custom columns with specific data types (Text, Number, Percentage, and Formula). Use custom mathematical formulas to evaluate metrics on the fly.
+- **Column Locking:** Secure your configuration by locking specific columns from accidental edits.
+- **Advanced Export:** Export your assessment data, calculated fields, and custom columns directly to an Excel Spreadsheet (`.xlsx`).
+- **Responsive Design:** Fully optimized for both desktop and mobile viewing with an adaptable interface and collapsible sidebar navigation.
+- **Local Auto-Save:** Data is automatically saved to your browser's local storage, ensuring you never lose your progress.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Tech Stack
 
-</div>
+- **Framework:** [React 18](https://react.dev/) via [Vite](https://vitejs.dev/)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **Icons:** [Lucide React](https://lucide.dev/)
+- **Animations:** [Motion](https://motion.dev/)
+- **Data Export:** [ExcelJS](https://github.com/exceljs/exceljs)
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v18 or higher recommended)
+- npm
+
+### Installation & Setup
+
+1. Install the project dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000` to start using the CAI Score Manager.

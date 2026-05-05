@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-zinc-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom scrollbar for a premium feel */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-zinc-50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-200 rounded-full hover:bg-zinc-300 transition-colors;
+  }
+}
+
+@layer components {
+  .premium-card {
+    @apply bg-white border border-zinc-200 shadow-sm transition-all duration-200;
+  }
+  
+  .premium-input {
+    @apply w-full bg-white border border-zinc-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-all;
+  }
+
+  .premium-button-primary {
+    @apply bg-black text-white rounded-full px-5 py-2 text-sm font-medium hover:bg-zinc-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .premium-button-secondary {
+    @apply bg-white text-black border border-zinc-200 rounded-full px-5 py-2 text-sm font-medium hover:bg-zinc-50 active:scale-[0.98] transition-all disabled:opacity-50;
+  }
+}
+
