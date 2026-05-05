@@ -22,6 +22,11 @@ import {
   Settings as SettingsIcon,
   Menu,
   X,
+  LogOut,
+  Upload,
+  Cloud,
+  CloudUpload,
+  CheckCircle2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
@@ -37,11 +42,45 @@ import { STORAGE_KEYS, LEVEL_WEIGHTS, DEFAULT_COLUMN_ORDER } from "./constants";
 import ScoreGrid from "./components/ScoreGrid";
 import ReverseScoreGrid from "./components/ReverseScoreGrid";
 import AddLearnerModal from "./components/AddLearnerModal";
+import ImportModal from "./components/ImportModal";
 import ExportButton from "./components/ExportButton";
 import UserGuide from "./components/UserGuide";
 import Settings from "./components/Settings";
+import LoginModal from "./components/LoginModal";
+import { auth, logOut, saveToCloud, loadFromCloud } from "./lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Cloud Sync State
+  const [isSaving, setIsSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Automatically attempt to load cloud data on login
+        try {
+          const cloudData = await loadFromCloud(currentUser.uid);
+          if (cloudData) {
+            if (cloudData.learners) setLearners(cloudData.learners);
+            if (cloudData.scores) setScores(cloudData.scores);
+            if (cloudData.reverseScores) setReverseScores(cloudData.reverseScores);
+            if (cloudData.columnOrder) setColumnOrder(cloudData.columnOrder);
+            if (cloudData.customColumns) setCustomColumns(cloudData.customColumns);
+          }
+        } catch (error) {
+          console.error("Could not load initial data", error);
+        }
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [selectedSubjectName, setSelectedSubjectName] = useState<string>(
     SUBJECTS[0].name,
   );
@@ -96,6 +135,7 @@ export default function App() {
   >("guide");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Persistence
   useEffect(() => {
@@ -127,6 +167,25 @@ export default function App() {
     );
   }, [customColumns]);
 
+  const handleSyncToCloud = async () => {
+    if (!user) return;
+    setSyncStatus('saving');
+    try {
+      await saveToCloud(user.uid, {
+        learners,
+        scores,
+        reverseScores,
+        columnOrder,
+        customColumns
+      });
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    } catch (error) {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 5000);
+    }
+  };
+
   const handleAddLearner = (name: string, stream: string) => {
     const newLearner: Learner = {
       id: crypto.randomUUID(),
@@ -136,6 +195,10 @@ export default function App() {
     };
     setLearners([...learners, newLearner]);
     setIsAddModalOpen(false);
+  };
+
+  const handleImportLearners = (importedLearners: Learner[]) => {
+    setLearners((prev) => [...prev, ...importedLearners]);
   };
 
   const handleDeleteLearner = (id: string) => {
@@ -193,6 +256,24 @@ export default function App() {
       </button>
     );
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+        <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-800 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex flex-col justify-center relative overflow-hidden">
+        {/* Background elements */}
+        <div className="absolute top-0 left-0 w-full h-96 bg-zinc-100/50 transform -skew-y-6 -translate-y-32 z-0" />
+        <LoginModal onSuccess={() => {}} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans selection:bg-black selection:text-white overflow-hidden">
@@ -254,7 +335,19 @@ export default function App() {
               </nav>
 
               <div className="p-4 border-t border-zinc-200">
-                <p className="text-xs text-zinc-400">&copy; 2026 CAI Manager</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      await logOut();
+                    } catch (error) {
+                      console.error("Logout failed", error);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 p-2 text-sm text-zinc-500 hover:text-black hover:bg-zinc-100 rounded-lg transition-colors"
+                >
+                  <LogOut size={16} />
+                  <span>Sign out</span>
+                </button>
               </div>
             </motion.aside>
           </>
@@ -314,6 +407,34 @@ export default function App() {
                 </select>
               </div>
 
+              <div className="hidden md:flex items-center">
+                <button
+                  onClick={handleSyncToCloud}
+                  disabled={syncStatus === 'saving'}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border",
+                    syncStatus === 'saved' 
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : syncStatus === 'error'
+                      ? "bg-red-50 text-red-600 border-red-200"
+                      : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm"
+                  )}
+                >
+                  {syncStatus === 'saving' ? (
+                    <CloudUpload size={16} className="animate-bounce" />
+                  ) : syncStatus === 'saved' ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <Cloud size={16} />
+                  )}
+                  <span>
+                    {syncStatus === 'saving' ? 'Saving...' 
+                    : syncStatus === 'saved' ? 'Saved'
+                    : 'Save to Cloud'}
+                  </span>
+                </button>
+              </div>
+
               <ExportButton
                 subject={selectedSubject}
                 learners={learners}
@@ -342,8 +463,16 @@ export default function App() {
               </h2>
               <div className="flex items-center gap-2 ml-auto">
                 <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="premium-button-secondary flex items-center justify-center gap-2 md:px-4 md:py-2 p-0 w-10 h-10 md:w-auto md:h-auto rounded-full shrink-0"
+                  title="Import Learners"
+                >
+                  <Upload size={16} />
+                  <span className="hidden md:inline">Import</span>
+                </button>
+                <button
                   onClick={() => setActiveSection(activeSection === "standard" ? "reverse" : "standard")}
-                  className="premium-button-secondary flex items-center justify-center gap-2 md:px-5 md:py-2 p-0 rounded-full shrink-0"
+                  className="premium-button-secondary flex items-center justify-center gap-2 md:px-5 md:py-2 p-0 w-10 h-10 md:w-auto md:h-auto rounded-full shrink-0"
                 >
                   <RefreshCcw size={16} />
                   <span className="hidden md:inline">{activeSection === "standard" ? "Reverse Calculation" : "Score Entry"}</span>
@@ -412,6 +541,13 @@ export default function App() {
           <AddLearnerModal
             onClose={() => setIsAddModalOpen(false)}
             onSave={handleAddLearner}
+          />
+        )}
+        {isImportModalOpen && (
+          <ImportModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onImport={handleImportLearners}
           />
         )}
       </AnimatePresence>
