@@ -366,21 +366,6 @@ export default function ExportButton({
         }
       }
 
-      // --- 3. GUIDE SHEET ---
-      if (type === 'all') {
-        const guideSheet = workbook.addWorksheet('User Guide');
-        guideSheet.columns = [{ width: 30 }, { width: 100 }];
-        guideSheet.addRow(['S3/S4 AoI & CAI Score Sheet — USER GUIDE']).font = { bold: true, size: 16 };
-        guideSheet.addRow([]);
-        guideSheet.addRow(['1. PREPARATION', 'Do This First']);
-        guideSheet.addRow(['Enter Max Scores', 'On the Score Sheet, find the MAX SCORES row (Row 4). Enter defaults from the subject config.']);
-        guideSheet.addRow(['2. DATA ENTRY', 'Score Sheet']);
-        guideSheet.addRow(['AoI Score', 'Enter raw Pts out of max (e.g. 2.5 out of 3). %AoI handles the rest.']);
-        guideSheet.addRow(['3. REVERSE SHEET', 'Special Feature']);
-        guideSheet.addRow(['The "Orange" Cells', 'Enter ONLY the percentages in the orange columns. The sheet will back-calculate raw scores.']);
-        guideSheet.addRow(['Difficulty Weights', 'L1 = 1.25, L2 = 1.10, L3 = 1.00, L4 = 0.85, L5 = 0.70.']);
-      }
-
       // Final styling for all sheets
       workbook.eachSheet((sheet) => {
         sheet.getRow(1).height = 25;
@@ -394,10 +379,17 @@ export default function ExportButton({
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
       anchor.href = url;
       anchor.download = `${subject.name}_${subject.class}_Scores_${new Date().toISOString().slice(0,10)}.xlsx`;
       anchor.click();
-      window.URL.revokeObjectURL(url);
+      
+      // Clean up
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(anchor);
+      }, 100);
 
     } catch (error) {
       console.error('Export failed:', error);
